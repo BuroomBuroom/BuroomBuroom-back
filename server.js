@@ -82,7 +82,7 @@ app.get('/oauth', async(req, res) => {
         res.status(404).send('User not found');
     }
     console.log(userInfo);
-    conn.query(`select * from users where classNo = '${userInfo.classNo}' and studentNo = '${userInfo.studentNo}'`,
+    conn.query(`select * from users where classNo = ? and studentNo = ?`, [userInfo.classNo, userInfo.studentNo],
     (err, result) => {
         if (err) {
             console.log(err)
@@ -94,12 +94,9 @@ app.get('/oauth', async(req, res) => {
                 name: userInfo.name,
                 grade: userInfo.grade,
             }, process.env.JWT_SECRET);
-            conn.query(`insert into users(token, grade, classNo, studentNo, name) values(
-            '${token}',
-            '${userInfo.grade}',
-            '${userInfo.classNo}',
-            '${userInfo.studentNo}',
-            '${userInfo.name}')`, (err, result) => { // insert
+            conn.query(`insert into users(token, grade, classNo, studentNo, name) values(?,?,?,?,?)`, 
+            [token, userInfo.grade, userInfo.classNo, userInfo.studentNo, userInfo.name], 
+            (err, result) => { // insert
                 if (err) {
                     console.log(err)
                     res.json({ message: err, success: false })
@@ -118,7 +115,7 @@ app.get('/oauth', async(req, res) => {
         }
         else { // 이미 DB에 저장된 유저 => DB에서 찾아서 리턴
             conn.query(`select * from users 
-            where classNo = '${userInfo.classNo}' and studentNo = '${userInfo.studentNo}'`, 
+            where classNo = ? and studentNo = ?`, [userInfo.classNo, userInfo.studentNo], 
             (err, result) => {
                 if (err) {
                     res.json({ 'massage': err, success: false });
@@ -140,7 +137,7 @@ app.get('/oauth', async(req, res) => {
 
 app.get('/login_check', (req, res) => { // 로그인 무결성 검사 API
     const token = req.query.token
-    conn.query(`select * from users where token = '${token}'`, // 본 사용자가 로그인을 하고 서비스를 이용하는가?
+    conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
         (err, result) => {
             if (err) { // 단순 error 처리문
                 console.log(err)
@@ -159,7 +156,7 @@ app.get('/user_check', (req, res) => { // 유저 무결성 검사 API
     const token = req.query.token
     const classNo = req.query.classNo;
     const studentNo = req.query.studentNo;
-    conn.query(`select * from users where token = '${token}'`, // 본 사용자가 로그인을 하고 서비스를 이용하는가?
+    conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
         (err, result) => {
             if (err) { // 단순 error 처리문
                 console.log(err)
@@ -187,7 +184,7 @@ app.get('/reservation', (req, res) => { // 예약 처리 API(C)
     const expirationDay = `${toYear}-${toMonth}-${friday}`
     const token = req.query.token
 
-    conn.query(`select id from users where token = '${token}'`,
+    conn.query(`select id from users where token = ?`, [token],
     (err, result) => {
         const userId = result[0].id
         if (err) { // 단순 error 처리문
@@ -195,12 +192,9 @@ app.get('/reservation', (req, res) => { // 예약 처리 API(C)
             res.json({ message: err, success: false })
         }
         else {
-            conn.query(`insert into reservation(userId, seatNo, reservationDay, expirationDay) values(
-            '${userId}'
-            '${seatNo}',
-            '${reservationDay}',
-            '${expirationDay}'
-            )`, (err, result) => {
+            conn.query(`insert into reservation(userId, seatNo, reservationDay, expirationDay) values(?,?,?,?)`,
+            [userId, seatNo, reservationDay, expirationDay],
+            (err, result) => {
                 if (err) { // 단순 error 처리문
                     console.log(err)
                     res.json({ message: err, success: false })
@@ -216,7 +210,7 @@ app.get('/reservation', (req, res) => { // 예약 처리 API(C)
 app.get('/ticket', (rep, res) => { // 티켓 발급 API(R)
     const token = req.query.token
     
-    conn.query(`select id from users where token = '${token}'`, // 토큰으로 유저 데이터 들고오기
+    conn.query(`select id from users where token = ?`, [token], // 토큰으로 유저 데이터 들고오기
     (err, result) => {
         const grade = result[0].grade;
         const classNo = result[0].classNo;
@@ -226,7 +220,7 @@ app.get('/ticket', (rep, res) => { // 티켓 발급 API(R)
             console.log(err)
             res.json({ message: err, success: false })
         } else {
-            conn.query(`select * from reservation where userId = ${result[0].id}`, // 외래키 이용 유저가 예약한 정보 들고오기
+            conn.query(`select * from reservation where userId = ?`, [result[0].id], // 외래키 이용 유저가 예약한 정보 들고오기
             (err, result) => {
                 if (err) { // 단순 error 처리문
                     console.log(err)
@@ -255,8 +249,9 @@ app.get('/reservation_update', (req, res) => { // 예약 업데이트(U)
     const userId = req.query.id;
 
     conn.query(`UPDATE reservation
-                SET seat = '${updateSeatNo}' and reservationDay = '${updateDay}'
-                WHERE Name = ${userId}`,
+                SET seat = ?, reservationDay = ?
+                WHERE userId = ?`,
+                [updateSeatNo, updateDay, userId],
                 (err, result) => {
                     if (err) { // 단순 error 처리문
                         console.log(err)
@@ -269,7 +264,7 @@ app.get('/reservation_update', (req, res) => { // 예약 업데이트(U)
 
 app.get('/reservation_cancel', (req, res) => { // 예약 취소(D)
     const seatNo = req.query.seatNo;
-    conn.query(`DELETE FROM reservation where seat = ${seatNo}`, 
+    conn.query(`DELETE FROM reservation where seat = ?`, [seatNo], 
     (err, result) => {
         if (err) { // 단순 error 처리문
             console.log(err)
