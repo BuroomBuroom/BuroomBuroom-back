@@ -179,12 +179,11 @@ app.get('/user_check', (req, res) => { // 유저 무결성 검사 API
         })
 })
 
-app.get('/reservation', (req, res) => { // 예약 처리 API
+app.get('/reservation', (req, res) => { // 예약 처리 API(C)
     // 사용자 이름, 좌석 정보, 예약 날짜, 시간, 만료 날짜(금주 토요일 고정)
     let friday = getFirday();
     const seatNo = req.query.seatNo;
-    const reservationTime = req.query.reservationTime
-    const reservationDay = req.query.reservationDay
+    const reservationDay = req.query.reservationDay // 년.월.일.시.분.초
     const expirationDay = `${toYear}-${toMonth}-${friday}`
     const token = req.query.token
 
@@ -196,10 +195,9 @@ app.get('/reservation', (req, res) => { // 예약 처리 API
             res.json({ message: err, success: false })
         }
         else {
-            conn.query(`insert into reservation(userId, seatNo, reservationTime, reservationDay, expirationDay) values(
+            conn.query(`insert into reservation(userId, seatNo, reservationDay, expirationDay) values(
             '${userId}'
             '${seatNo}',
-            '${reservationTime}',
             '${reservationDay}',
             '${expirationDay}'
             )`, (err, result) => {
@@ -215,11 +213,15 @@ app.get('/reservation', (req, res) => { // 예약 처리 API
     })
 })
 
-app.get('ticket', (rep, res) => {
+app.get('/ticket', (rep, res) => { // 티켓 발급 API(R)
     const token = req.query.token
     
     conn.query(`select id from users where token = '${token}'`, // 토큰으로 유저 데이터 들고오기
     (err, result) => {
+        const grade = result[0].grade;
+        const classNo = result[0].classNo;
+        const studentNo = result[0].studentNo;
+        const name = result[0].name;
         if (err) { // 단순 error 처리문
             console.log(err)
             res.json({ message: err, success: false })
@@ -230,15 +232,50 @@ app.get('ticket', (rep, res) => {
                     console.log(err)
                     res.json({ message: err, success: false })
                 } else {
-                    return res.json({ 
+                    return res.json({ // 티켓 발급에 필요한 데이터 리턴
+                        grade: grade,
+                        classNo: classNo,
+                        studentNo: studentNo,
+                        name: name,
+                        userId: result[0].userId,
                         seatNo: result[0].seat,
-                        reservationTime: result[0].reservationTime,
                         reservationDay: result[0].reservationDay,
                         expirationDay: result[0].expirationDay,
                         success: true
                     })
                 }
             })
+        }
+    })
+})
+
+app.get('/reservation_update', (req, res) => { // 예약 업데이트(U)
+    const updateSeatNo = req.query.seatNo;
+    const updateDay = req.query.reservationDay;
+    const userId = req.query.id;
+
+    conn.query(`UPDATE reservation
+                SET seat = '${updateSeatNo}' and reservationDay = '${updateDay}'
+                WHERE Name = ${userId}`,
+                (err, result) => {
+                    if (err) { // 단순 error 처리문
+                        console.log(err)
+                        res.json({ message: err, success: false })
+                    } else {
+                        res.json({message: `${updateSeatNo}로 좌석이 업데이트 되었음.`, success: true})
+                    }
+            })
+})
+
+app.get('/reservation_cancel', (req, res) => { // 예약 취소(D)
+    const seatNo = req.query.seatNo;
+    conn.query(`DELETE FROM reservation where seat = ${seatNo}`, 
+    (err, result) => {
+        if (err) { // 단순 error 처리문
+            console.log(err)
+            res.json({ message: err, success: false })
+        } else {
+            res.json({ message: `좌석이 예약 취소 되었음.`, success: true })
         }
     })
 })
