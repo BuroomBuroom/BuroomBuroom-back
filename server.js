@@ -6,6 +6,7 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+app.use(cors());
 
 function getSaturday() {
     var currentDay = new Date();
