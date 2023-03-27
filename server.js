@@ -4,36 +4,32 @@ const { conn } = require("./config/config");
 require("dotenv").config();
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 
+function getSaturday() {
+    var currentDay = new Date();
+    var theYear = currentDay.getFullYear();
+    var theMonth = currentDay.getMonth();
+    var theDate = currentDay.getDate();
+    var theDayOfWeek = currentDay.getDay();
 
-let day = new Date();
-let toDate = day.getDate()
-let today = day.getDay()
-let toMonth = day.getMonth() + 1;
-let toYear = day.getFullYear();
+    var thisWeek = [];
 
-function getFirday() {
-    switch (today) {
-        case 1:
-            toDate += 5
-            break;
-        case 2:
-            toDate += 4
-            break;
-        case 3:
-            toDate += 3
-            break;
-        case 4:
-            toDate += 2
-            break;
-        case 5:
-            toDate += 1
-            break;
-        case 6:
-            toDate;
-            break;
+    for (var i = 0; i < 7; i++) {
+        var resultDay = new Date(theYear, theMonth, theDate + (i - theDayOfWeek));
+        var yyyy = resultDay.getFullYear();
+        var mm = Number(resultDay.getMonth()) + 1;
+        var dd = resultDay.getDate();
+
+        mm = String(mm).length === 1 ? '0' + mm : mm;
+        dd = String(dd).length === 1 ? '0' + dd : dd;
+
+        thisWeek[i] = yyyy + '-' + mm + '-' + dd;
     }
-    return toDate
+
+    console.log(thisWeek[6]);
+    return thisWeek[6];
 }
 
 
@@ -156,6 +152,7 @@ app.get('/user_check', (req, res) => { // 유저 무결성 검사 API
     const token = req.query.token
     const classNo = req.query.classNo;
     const studentNo = req.query.studentNo;
+    const grade = req.query.grade
     conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
         (err, result) => {
             if (err) { // 단순 error 처리문
@@ -167,7 +164,7 @@ app.get('/user_check', (req, res) => { // 유저 무결성 검사 API
             }
             else { // 오 너 로그인 했구나!?
                 console.log(result[0].studentNo)
-                if (result[0].studentNo == studentNo && result[0].classNo == classNo) { // 본 사용자가 예약하고자 하는 고객이 맞는가?
+                if (result[0].studentNo == studentNo && result[0].classNo == classNo && result[0].grade == grade) { // 본 사용자가 예약하고자 하는 고객이 맞는가?
                     res.json({ message: '올바른 사용자', name: result[0].name, success: true })
                 } else {
                     res.json({ message: '올바르지 않은 사용자', success: false })
@@ -178,10 +175,9 @@ app.get('/user_check', (req, res) => { // 유저 무결성 검사 API
 
 app.get('/reservation', (req, res) => { // 예약 처리 API(C)
     // 사용자 이름, 좌석 정보, 예약 날짜, 시간, 만료 날짜(금주 토요일 고정)
-    let friday = getFirday();
     const seatNo = req.query.seatNo;
     const reservationDay = req.query.reservationDay // 년.월.일.시.분.초
-    const expirationDay = `${toYear}-${toMonth}-${friday}`
+    const expirationDay = getSaturday()
     const token = req.query.token
 
     conn.query(`select id from users where token = ?`, [token],
@@ -192,14 +188,13 @@ app.get('/reservation', (req, res) => { // 예약 처리 API(C)
             res.json({ message: err, success: false })
         }
         else {
-            conn.query(`insert into reservation(userId, seatNo, reservationDay, expirationDay) values(?,?,?,?)`,
+            conn.query(`insert into reservation(userId, seat, reservationDay, expirationDay) values(?,?,?,?)`,
             [userId, seatNo, reservationDay, expirationDay],
             (err, result) => {
                 if (err) { // 단순 error 처리문
                     console.log(err)
                     res.json({ message: err, success: false })
                 } else {
-                    console.log(result)
                     res.json({ message: '좌석 예약 완료', success: true })
                 }
             })
@@ -207,10 +202,10 @@ app.get('/reservation', (req, res) => { // 예약 처리 API(C)
     })
 })
 
-app.get('/ticket', (rep, res) => { // 티켓 발급 API(R)
+app.get('/ticket', (req, res) => { // 티켓 발급 API(R)
     const token = req.query.token
     
-    conn.query(`select id from users where token = ?`, [token], // 토큰으로 유저 데이터 들고오기
+    conn.query(`select * from users where token = ?`, [token], // 토큰으로 유저 데이터 들고오기
     (err, result) => {
         const grade = result[0].grade;
         const classNo = result[0].classNo;
@@ -243,10 +238,10 @@ app.get('/ticket', (rep, res) => { // 티켓 발급 API(R)
     })
 })
 
-app.get('/reservation_update', (req, res) => { // 예약 업데이트(U)
+app.patch('/reservation_update', (req, res) => { // 예약 업데이트(U)
     const updateSeatNo = req.query.seatNo;
     const updateDay = req.query.reservationDay;
-    const userId = req.query.id;
+    const userId = req.query.userId;
 
     conn.query(`UPDATE reservation
                 SET seat = ?, reservationDay = ?
@@ -257,12 +252,13 @@ app.get('/reservation_update', (req, res) => { // 예약 업데이트(U)
                         console.log(err)
                         res.json({ message: err, success: false })
                     } else {
+                        console.log(result)
                         res.json({message: `${updateSeatNo}로 좌석이 업데이트 되었음.`, success: true})
                     }
             })
 })
 
-app.get('/reservation_cancel', (req, res) => { // 예약 취소(D)
+app.delete('/reservation_cancel', (req, res) => { // 예약 취소(D)
     const seatNo = req.query.seatNo;
     conn.query(`DELETE FROM reservation where seat = ?`, [seatNo], 
     (err, result) => {
