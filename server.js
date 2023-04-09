@@ -103,11 +103,8 @@ app.get('/oauth', async(req, res) => {
                 }
                 else if (result) {
                     return res.json({
-                        token: token,
-                        grade: userInfo.grade,
-                        classNo: userInfo.classNo,
-                        studentNo: userInfo.sutdentNo,
-                        studentName: userInfo.name,
+                        message : 'login successful',
+                        user_token: token,
                         success: true
                     })
                 }
@@ -122,11 +119,8 @@ app.get('/oauth', async(req, res) => {
                 } else {
                     console.log('이미 DB에 저장된 유저임.')
                     return res.json({
-                        token : token,
-                        grade: result[0].grade,
-                        classNo: result[0].classNo,
-                        studentNo: result[0].sutdentNo,
-                        studentName: result[0].name,
+                        message: 'login successful',
+                        user_token: token,
                         success: true
                     })
                 }
@@ -135,8 +129,31 @@ app.get('/oauth', async(req, res) => {
     })
 });
 
-app.get('/login_check', (req, res) => { // 로그인 무결성 검사 API
-    const token = req.query.token
+app.post('user_info', (req, res) => { // 사용자 정보 리턴 해주는 API
+    const token = req.body.token;
+    conn.query(`select * from users where token = ?`, [token], (err, result) => {
+        if (err) { // 단순 error 처리문
+            console.log(err)
+            res.json({ message: err, success: false })
+        }
+        if (result.length === 0) { // 이 토큰으로 검색되는 유저 정보 값이 없을 시에
+            res.json({ message: '토큰 값이 잘못 되어 검색된 사용자 정보가 없음.', success: false })
+        }
+        else { // 토큰 값이 유효해서 사용자 정보가 DB에서 제대로 불러와짐
+            res.json({ 
+                message: '토큰 값이 유효하여 사용자 정보를 리턴함.',
+                grade: result[0].grade,
+                classNo: result[0].classNo,
+                studentNo: result[0].sutdentNo,
+                studentName: result[0].name,
+                success: true 
+            })
+        }
+    })
+})
+
+app.post('/login_check', (req, res) => { // 로그인 무결성 검사 API
+    const token = req.body.token
     conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
         (err, result) => {
             if (err) { // 단순 error 처리문
@@ -152,11 +169,11 @@ app.get('/login_check', (req, res) => { // 로그인 무결성 검사 API
         })
 })
 
-app.get('/user_check', (req, res) => { // 유저 무결성 검사 API
-    const token = req.query.token
-    const classNo = req.query.classNo;
-    const studentNo = req.query.studentNo;
-    const grade = req.query.grade
+app.post('/user_check', (req, res) => { // 유저 무결성 검사 API
+    const token = req.body.token
+    const classNo = req.body.classNo;
+    const studentNo = req.body.studentNo;
+    const grade = req.boody.grade
     conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
         (err, result) => {
             if (err) { // 단순 error 처리문
