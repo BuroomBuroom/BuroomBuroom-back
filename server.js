@@ -46,6 +46,10 @@ conn.connect((err) => {
     }
 })
 
+app.get('/', (req,res) => {
+    res.send('This Page is Index Page')
+})
+
 app.get('/oauth', async(req, res) => {
     const authcode = req.query.code;
     if (authcode === undefined) {
