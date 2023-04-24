@@ -47,6 +47,33 @@ conn.connect((err) => {
     }
 })
 
+const user_check = (req, res, next) => { // 유저 무결성 검사 API
+    const token = req.body.token
+    const classNo = req.body.classNo;
+    const studentNo = req.body.studentNo;
+    const studentName = req.body.studentName
+    const grade = req.body.grade
+    conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
+        (err, result) => {
+            if (err) { // 단순 error 처리문
+                console.log(err)
+                res.json({ message: err, success: false })
+            }
+            if (result.length === 0) { // 어? 토큰이 없네 => 로그인하고 이용해라.
+                res.json({ message: '토큰이 유호하지 못하거나 사용자의 토큰이 아님.', success: false })
+            }
+            else { // 오 너 로그인 했구나!?
+                if (result[0].studentNo == studentNo && result[0].classNo == classNo && result[0].grade == grade && result[0].name == studentName) { // 본 사용자가 예약하고자 하는 고객이 맞는가?
+                    next();
+                } else {
+                    return res.json({message : '올바르지 못한 사용자가 접근할려고 함.', success : false})
+                }
+            }
+        })
+}
+
+app.use(user_check)
+
 app.get('/oauth', async(req, res) => {
     const authcode = req.query.code;
     if (authcode === undefined) {
@@ -144,40 +171,6 @@ app.get('/login_success', (req, res) => {
     })
 })
 
-app.post('/user_info', (req, res) => { // 사용자 정보 리턴 해주는 API
-    const token = req.body.token;
-    try {
-        var check = jwt.verify(token, "secretkey",);
-        if (check) { // 토큰 값이 유효한지 체크
-            console.log(check.auth); 
-            if (check.auth) { // auth가 true인지 체크 -> 이상한 토큰 값을 거름
-                conn.query(`select * from users where token = ?`, [token], (err, result) => { // 안전한 토큰 값을 확인한 후에 쿼리
-                    if (err) { // 단순 error 처리문
-                        console.log(err)
-                        res.json({ message: err, success: false })
-                    }
-                    if (result.length === 0) { // 이 토큰으로 검색되는 유저 정보 값이 없을 시에
-                        res.json({ message: '토큰 값이 잘못 되어 검색된 사용자 정보가 없음.', success: false })
-                    }
-                    else { // 토큰 값이 유효해서 사용자 정보가 DB에서 제대로 불러와짐
-                        res.json({
-                            message: '토큰 값이 유효하여 사용자 정보를 리턴함.',
-                            grade: result[0].grade,
-                            classNo: result[0].classNo,
-                            studentNo: result[0].sutdentNo,
-                            studentName: result[0].name,
-                            success: true
-                        })
-                    }
-                })
-            }
-        }
-    } catch (err) {
-        console.error(err);
-        return res.json({ message: err.message, success: false });
-    }
-})
-
 app.post('/login_check', (req, res) => { // 로그인 무결성 검사 API
     const token = req.body.token
     conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
@@ -195,33 +188,9 @@ app.post('/login_check', (req, res) => { // 로그인 무결성 검사 API
         })
 })
 
-app.post('/user_check', (req, res) => { // 유저 무결성 검사 API
-    const token = req.body.token
-    const classNo = req.body.classNo;
-    const studentNo = req.body.studentNo;
-    const grade = req.boody.grade
-    conn.query(`select * from users where token = ?`, [token], // 본 사용자가 로그인을 하고 서비스를 이용하는가?
-        (err, result) => {
-            if (err) { // 단순 error 처리문
-                console.log(err)
-                res.json({ message: err, success: false })
-            }
-            if (result.length === 0) { // 어? 토큰이 없네 => 로그인하고 이용해라.
-                res.json({ message: '토큰이 유호하지 못하거나 사용자의 토큰이 아님.', success: false })
-            }
-            else { // 오 너 로그인 했구나!?
-                console.log(result[0].studentNo)
-                if (result[0].studentNo == studentNo && result[0].classNo == classNo && result[0].grade == grade) { // 본 사용자가 예약하고자 하는 고객이 맞는가?
-                    res.json({ message: '올바른 사용자', name: result[0].name, success: true })
-                } else {
-                    res.json({ message: '올바르지 않은 사용자', success: false })
-                }
-            }
-        })
-})
-
 app.post('/reservation', (req, res) => { // 예약 처리 API(C)
     // 사용자 이름, 좌석 정보, 예약 날짜, 시간, 만료 날짜(금주 토요일 고정)
+    req.user_check
     const seatNo = req.body.seatNo;
     const reservationDay = req.body.reservationDay // 년.월.일.시.분.초
     const expirationDay = getSaturday()
@@ -250,6 +219,7 @@ app.post('/reservation', (req, res) => { // 예약 처리 API(C)
 })
 
 app.post('/ticket', (req, res) => { // 티켓 발급 API(R)
+    req.user_check
     const token = req.body.token
     
     conn.query(`select * from users where token = ?`, [token], // 토큰으로 유저 데이터 들고오기
@@ -286,6 +256,7 @@ app.post('/ticket', (req, res) => { // 티켓 발급 API(R)
 })
 
 app.patch('/reservation_update', (req, res) => { // 예약 업데이트(U)
+    req.user_check
     const updateSeatNo = req.query.seatNo;
     const updateDay = req.query.reservationDay;
     const userId = req.query.userId;
@@ -306,6 +277,7 @@ app.patch('/reservation_update', (req, res) => { // 예약 업데이트(U)
 })
 
 app.delete('/reservation_cancel', (req, res) => { // 예약 취소(D)
+    req.user_check
     const seatNo = req.query.seatNo;
     conn.query(`DELETE FROM reservation where seat = ?`, [seatNo], 
     (err, result) => {
